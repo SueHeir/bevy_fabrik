@@ -1,0 +1,17 @@
+[package]
+name = "bevy_fabrik"
+version = "0.1.0"
+authors = ["Tomas Seniūnas <tomseniunas@gmail.com>"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "IK solver for Bevy using FABRIK algorithm"
+keywords = ["gamedev", "bevy", "animation"]
+categories = ["game-development"]
+readme = "README.md"
+repository = "https://github.com/Kilbukas/bevy_fabrik"
+
+[dependencies]
+bevy = { version = "0.14", default-features = false }
+
+[dev-dependencies]
+bevy = { version = "0.14", default-features = false, features = ["bevy_winit", "bevy_pbr", "tonemapping_luts"] }
