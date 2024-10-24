@@ -1,10 +1,10 @@
 //! [FABRIK] inverse kinematics implementation for [Bevy].
-//! 
+//!
 //! [FABRIK]: https://www.andreasaristidou.com/FABRIK.html
 //! [Bevy]: https://bevyengine.org
 
-mod constraint;
 mod chain;
+mod constraint;
 mod util;
 
 use bevy::prelude::*;
@@ -30,6 +30,7 @@ fn ik_solve(
 pub struct InverseKinematicsPlugin;
 
 impl Plugin for InverseKinematicsPlugin {
+    #[rustfmt::skip]
     fn build(&self, app: &mut App) {
         app.register_type::<IkChain>()
             .register_type::<SwingConstraint>()

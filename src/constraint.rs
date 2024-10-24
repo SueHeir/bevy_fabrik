@@ -7,7 +7,6 @@ pub(crate) trait Constraint {
     fn apply(&self, swing: Quat, twist: Quat) -> (Quat, Quat);
 }
 
-
 /// Constrains the swing of a joint rotation by a given angle in radians.
 #[derive(Component, Clone, Reflect)]
 pub struct SwingConstraint(pub f32);

@@ -3,13 +3,10 @@ use bevy::{
         component::{ComponentHooks, ComponentId, StorageType},
         query::QueryEntityError,
         system::QueryLens,
-        world::DeferredWorld
+        world::DeferredWorld,
     },
-    math::{
-        Affine3A,
-        Vec3A
-    },
-    prelude::*
+    math::{Affine3A, Vec3A},
+    prelude::*,
 };
 
 use crate::constraint::*;
@@ -41,10 +38,10 @@ impl Component for IkChain {
         hooks.on_insert(ik_chain_insert_hook);
     }
 }
-    
+
 impl IkChain {
     /// Creates a new IK chain with the given number of joints.
-    /// 
+    ///
     /// The parent entities need to already exist in the [`World`] and
     /// have [`GlobalTransform`] components correctly set up.
     pub fn new(joint_count: usize) -> Self {
@@ -65,33 +62,41 @@ impl IkChain {
         constraint_query: &mut Query<(Option<&SwingConstraint>, Option<&TwistConstraint>)>,
         transform_query: &mut Query<(Option<&Parent>, &mut Transform, &GlobalTransform)>,
     ) -> Result<(), QueryEntityError> {
-        if !self.enabled || transform_query.get(*entity)?.2.translation().distance_squared(self.target) < self.threshold {
+        if !self.enabled {
             return Ok(());
         }
 
-        let mut constraint_lens : QueryLens<(
+        let dist = transform_query
+            .get(*entity)?
+            .2
+            .translation()
+            .distance_squared(self.target);
+        if dist < self.threshold {
+            return Ok(());
+        }
+
+        let mut constraint_lens: QueryLens<(
             Option<&Parent>,
             &GlobalTransform,
             Option<&SwingConstraint>,
-            Option<&TwistConstraint>
+            Option<&TwistConstraint>,
         )> = constraint_query.join_filtered(transform_query);
         let lens_query = constraint_lens.query();
 
         // Collect joint transforms and constraints, if any
-        let mut joint_transforms : Vec<(GlobalTransform, Vec<&dyn Constraint>)> = vec![];
+        let mut joint_transforms: Vec<(GlobalTransform, Vec<&dyn Constraint>)> = vec![];
         let mut current_joint = *entity;
         for i in 0..self.joint_count {
-            let (
-                parent,
-                global_transform,
-                swing_constraint,
-                twist_constraint
-            ) = lens_query.get(current_joint)?;
+            let (parent, global_transform, swing_constraint, twist_constraint) =
+                lens_query.get(current_joint)?;
 
             let constraints = vec![
                 swing_constraint.map(|c| c as &dyn Constraint),
                 twist_constraint.map(|c| c as &dyn Constraint),
-            ].into_iter().flatten().collect();
+            ]
+            .into_iter()
+            .flatten()
+            .collect();
 
             joint_transforms.push((*global_transform, constraints));
 
@@ -103,7 +108,11 @@ impl IkChain {
 
         // Solve
         for _ in 0..self.max_iterations {
-            if self.target.distance_squared(joint_transforms.first().unwrap().0.translation()) < self.threshold {
+            if self
+                .target
+                .distance_squared(joint_transforms.first().unwrap().0.translation())
+                < self.threshold
+            {
                 break;
             }
 
@@ -115,7 +124,9 @@ impl IkChain {
         let mut current_joint = *entity;
         for i in 0..self.joint_count - 1 {
             let (parent, mut transform, _) = transform_query.get_mut(current_joint)?;
-            let updated_transform = joint_transforms[i].0.reparented_to(&joint_transforms[i + 1].0);
+            let updated_transform = joint_transforms[i]
+                .0
+                .reparented_to(&joint_transforms[i + 1].0);
             transform.translation = updated_transform.translation;
             transform.rotation = updated_transform.rotation;
             current_joint = **parent.unwrap();
@@ -124,66 +135,72 @@ impl IkChain {
         Ok(())
     }
 
-    fn backward_pass(
-        &self,
-        joints: &mut Vec<(GlobalTransform, Vec<&dyn Constraint>)>,
-    ) {
+    fn backward_pass(&self, joints: &mut Vec<(GlobalTransform, Vec<&dyn Constraint>)>) {
         let origin = joints.last().unwrap().0.translation();
 
         joints[0].0 = Affine3A {
             matrix3: joints[0].0.affine().matrix3,
             translation: Vec3A::from(self.target),
-        }.into();
+        }
+        .into();
 
         for i in 1..joints.len() {
-            let direction: Vec3A = (joints[i].0.translation() - joints[i - 1].0.translation()).normalize().into();
+            let direction: Vec3A = (joints[i].0.translation() - joints[i - 1].0.translation())
+                .normalize()
+                .into();
 
             joints[i].0 = Affine3A {
                 matrix3: joints[i - 1].0.affine().matrix3,
-                translation: joints[i - 1].0.affine().translation + direction * self.joint_lengths[i - 1],
-            }.into();
+                translation: joints[i - 1].0.affine().translation
+                    + direction * self.joint_lengths[i - 1],
+            }
+            .into();
         }
-        
+
         // Set root transform back to origin
         joints.last_mut().unwrap().0 = Affine3A {
             matrix3: joints.last().unwrap().0.affine().matrix3,
             translation: origin.into(),
-        }.into();
+        }
+        .into();
     }
 
-    fn forward_pass(
-        &self,
-        joints: &mut Vec<(GlobalTransform, Vec<&dyn Constraint>)>,
-    ) {
+    fn forward_pass(&self, joints: &mut Vec<(GlobalTransform, Vec<&dyn Constraint>)>) {
         let root_end_index = joints.len() - 2;
 
         joints[root_end_index].0 = Affine3A {
             matrix3: joints[root_end_index].0.affine().matrix3,
-            translation: joints.last().unwrap().0.affine().translation + Vec3A::from(self.root_normal * self.joint_lengths[root_end_index]),
-        }.into();
+            translation: joints.last().unwrap().0.affine().translation
+                + Vec3A::from(self.root_normal * self.joint_lengths[root_end_index]),
+        }
+        .into();
 
         for i in (0..root_end_index).rev() {
             let child_transform = joints[i + 1].0;
             let parent_transform = joints[i].0;
 
-            let direction = (parent_transform.translation() - child_transform.translation()).normalize();
+            let direction =
+                (parent_transform.translation() - child_transform.translation()).normalize();
 
-            joints[i + 1].0 = rotate_and_constrain(direction, self.root_normal.into(), child_transform, joints[i + 1].1.clone());
+            joints[i + 1].0 = rotate_and_constrain(
+                direction,
+                self.root_normal.into(),
+                child_transform,
+                joints[i + 1].1.clone(),
+            );
 
             joints[i].0 = Affine3A {
                 matrix3: parent_transform.affine().matrix3,
-                translation: joints[i + 1].0.affine().translation + Vec3A::from(joints[i + 1].0.up() * self.joint_lengths[i + 1]),
-            }.into();
+                translation: joints[i + 1].0.affine().translation
+                    + Vec3A::from(joints[i + 1].0.up() * self.joint_lengths[i + 1]),
+            }
+            .into();
         }
     }
 }
 
-fn ik_chain_insert_hook(
-    mut world: DeferredWorld,
-    entity: Entity,
-    _component_id: ComponentId,
-) {
-    let joint_count = {world.get::<IkChain>(entity).unwrap().joint_count};
+fn ik_chain_insert_hook(mut world: DeferredWorld, entity: Entity, _component_id: ComponentId) {
+    let joint_count = { world.get::<IkChain>(entity).unwrap().joint_count };
 
     if joint_count < 2 {
         panic!("IK chain must have at least 2 joints.");
@@ -197,7 +214,10 @@ fn ik_chain_insert_hook(
     for _ in 1..joint_count {
         let joint = {
             let Some(joint) = world.get::<Parent>(tail) else {
-                panic!("Parent not found for entity {:?} while building IK chain (length {:?})", tail, joint_count);
+                panic!(
+                    "Parent not found for entity {:?} while building IK chain (length {:?})",
+                    tail, joint_count
+                );
             };
             **joint
         };
@@ -211,7 +231,10 @@ fn ik_chain_insert_hook(
 
         let tail_pos = {
             let Some(transform) = world.get::<GlobalTransform>(tail) else {
-                panic!("Transform not found for entity {:?} while building IK chain (length {:?})", tail, joint_count);
+                panic!(
+                    "Transform not found for entity {:?} while building IK chain (length {:?})",
+                    tail, joint_count
+                );
             };
             transform.translation()
         };
@@ -221,7 +244,10 @@ fn ik_chain_insert_hook(
         tail = joint;
     }
     let Some(mut chain) = world.get_mut::<IkChain>(entity) else {
-        panic!("IkChain component not found for entity {:?} while building IK chain.", entity);
+        panic!(
+            "IkChain component not found for entity {:?} while building IK chain.",
+            entity
+        );
     };
 
     chain.joint_lengths = lengths;

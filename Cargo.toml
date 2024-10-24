@@ -15,3 +15,6 @@ bevy = { version = "0.14", default-features = false }
 
 [dev-dependencies]
 bevy = { version = "0.14", default-features = false, features = ["bevy_winit", "bevy_pbr", "tonemapping_luts"] }
+
+[lints.clippy]
+type_complexity = "allow"
