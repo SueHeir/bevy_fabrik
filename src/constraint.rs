@@ -31,7 +31,7 @@ pub(crate) fn rotate_and_constrain(
     direction: Vec3,
     normal: Vec3,
     transform: GlobalTransform,
-    constraints: Vec<&dyn Constraint>,
+    constraints: &[&dyn Constraint],
 ) -> GlobalTransform {
     let mut result = transform.compute_transform();
 

@@ -90,7 +90,7 @@ impl IkChain {
             let (parent, global_transform, swing_constraint, twist_constraint) =
                 lens_query.get(current_joint)?;
 
-            let constraints = vec![
+            let constraints = [
                 swing_constraint.map(|c| c as &dyn Constraint),
                 twist_constraint.map(|c| c as &dyn Constraint),
             ]
@@ -116,8 +116,8 @@ impl IkChain {
                 break;
             }
 
-            self.backward_pass(&mut joint_transforms);
-            self.forward_pass(&mut joint_transforms);
+            self.backward_pass(&mut joint_transforms[..]);
+            self.forward_pass(&mut joint_transforms[..]);
         }
 
         // Apply the transforms
@@ -135,7 +135,7 @@ impl IkChain {
         Ok(())
     }
 
-    fn backward_pass(&self, joints: &mut Vec<(GlobalTransform, Vec<&dyn Constraint>)>) {
+    fn backward_pass(&self, joints: &mut [(GlobalTransform, Vec<&dyn Constraint>)]) {
         let origin = joints.last().unwrap().0.translation();
 
         joints[0].0 = Affine3A {
@@ -165,7 +165,7 @@ impl IkChain {
         .into();
     }
 
-    fn forward_pass(&self, joints: &mut Vec<(GlobalTransform, Vec<&dyn Constraint>)>) {
+    fn forward_pass(&self, joints: &mut [(GlobalTransform, Vec<&dyn Constraint>)]) {
         let root_end_index = joints.len() - 2;
 
         joints[root_end_index].0 = Affine3A {
@@ -186,7 +186,7 @@ impl IkChain {
                 direction,
                 self.root_normal.into(),
                 child_transform,
-                joints[i + 1].1.clone(),
+                &joints[i + 1].1,
             );
 
             joints[i].0 = Affine3A {
