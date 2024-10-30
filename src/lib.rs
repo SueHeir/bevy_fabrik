@@ -8,6 +8,7 @@ mod constraint;
 mod util;
 
 use bevy::prelude::*;
+use bevy::transform::TransformSystem;
 
 pub use crate::chain::IkChain;
 pub use crate::constraint::{SwingConstraint, TwistConstraint};
@@ -25,6 +26,13 @@ fn ik_solve(
     }
 }
 
+/// Set enum for the systems relating to inverse kinematics
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
+pub enum IkSystem {
+    /// Solves inverse kinematics chains
+    Solve,
+}
+
 /// [`Plugin`] for inverse kinematics. Needs to be added to the [`App`] for
 /// [`IkChain`] components to solve and apply transforms.
 pub struct InverseKinematicsPlugin;
@@ -35,8 +43,9 @@ impl Plugin for InverseKinematicsPlugin {
         app.register_type::<IkChain>()
             .register_type::<SwingConstraint>()
             .register_type::<TwistConstraint>()
-            .add_systems(Update, (
+            .add_systems(PostUpdate, (
                 ik_solve,
-            ));
+            ).after(TransformSystem::TransformPropagate).in_set(IkSystem::Solve)
+        );
     }
 }
