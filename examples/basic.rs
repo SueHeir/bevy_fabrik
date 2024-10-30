@@ -1,6 +1,10 @@
 use bevy::prelude::*;
+use bevy::transform::TransformSystem;
 
 use bevy_fabrik::*;
+
+const SEGMENT_LENGTH: f32 = 0.4;
+const SEGMENT_COUNT: usize = 14;
 
 #[derive(Component)]
 struct IkTarget;
@@ -10,10 +14,17 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins(InverseKinematicsPlugin)
         .add_systems(Startup, setup)
-        .add_systems(Update, move_target)
-        .add_systems(Update, update_chain_target)
+        // IkChain needs GlobalTransforms for initialization, so it's added after transform propagation.
+        .add_systems(
+            PostStartup,
+            ik_setup.after(TransformSystem::TransformPropagate),
+        )
+        .add_systems(Update, (move_target, update_chain_target))
         .run();
 }
+
+#[derive(Component)]
+struct IkTailMarker;
 
 fn setup(
     mut commands: Commands,
@@ -25,24 +36,18 @@ fn setup(
         half_length: 0.25,
     });
     let joint_material = materials.add(StandardMaterial::default());
-    let root = commands
-        .spawn(SpatialBundle {
-            global_transform: GlobalTransform::from_translation(Vec3::new(0.0, -3.0, 0.0)),
-            ..default()
-        })
-        .id();
+    let root = commands.spawn(SpatialBundle::default()).id();
 
     let chain_tail = spawn_chain(
         &mut commands,
         joint_mesh,
         joint_material,
-        Vec3::new(0.0, -2.6, 0.0),
-        Vec3::new(0.0, 0.4, 0.0),
-        14,
+        Vec3::Y * SEGMENT_LENGTH,
+        SEGMENT_COUNT,
         root,
     );
 
-    commands.entity(chain_tail).insert(IkChain::new(15));
+    commands.entity(chain_tail).insert(IkTailMarker);
 
     commands.spawn(Camera3dBundle {
         transform: Transform::from_xyz(-2.5, 6.5, 9.0).looking_at(Vec3::Y * 3.0, Vec3::Y),
@@ -66,6 +71,14 @@ fn setup(
         },
         ..default()
     });
+}
+
+fn ik_setup(mut commands: Commands, query: Query<Entity, With<IkTailMarker>>) {
+    if let Ok(tail) = query.get_single() {
+        commands
+            .entity(tail)
+            .insert(IkChain::new(SEGMENT_COUNT + 1));
+    }
 }
 
 #[rustfmt::skip]
@@ -99,8 +112,7 @@ fn spawn_chain(
     commands: &mut Commands,
     mesh: Handle<Mesh>,
     material: Handle<StandardMaterial>,
-    bone_root: Vec3,
-    bone_tail: Vec3,
+    transform: Vec3,
     joint_count: usize,
     parent: Entity,
 ) -> Entity {
@@ -108,12 +120,10 @@ fn spawn_chain(
     if joint_count == 1 {
         let tail = commands
             .spawn(SpatialBundle {
-                transform: Transform::from_translation(bone_tail),
-                global_transform: GlobalTransform::from_translation(bone_root),
+                transform: Transform::from_translation(transform),
                 ..default()
             })
             .id();
-
         commands.entity(parent).add_child(tail);
         return tail;
     }
@@ -122,21 +132,11 @@ fn spawn_chain(
         .spawn(PbrBundle {
             mesh: mesh.clone(),
             material: material.clone(),
-            transform: Transform::from_translation(bone_tail),
-            global_transform: GlobalTransform::from_translation(bone_root),
+            transform: Transform::from_translation(transform),
             ..default()
         })
         .id();
-
     commands.entity(parent).add_child(joint);
 
-    spawn_chain(
-        commands,
-        mesh,
-        material,
-        bone_root + bone_tail,
-        bone_tail,
-        joint_count - 1,
-        joint,
-    )
+    spawn_chain(commands, mesh, material, transform, joint_count - 1, joint)
 }
