@@ -1,6 +1,6 @@
 [package]
 name = "bevy_fabrik"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Tomas Seniūnas <tomseniunas@gmail.com>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -14,7 +14,11 @@ repository = "https://github.com/Kilbukas/bevy_fabrik"
 bevy = { version = "0.14", default-features = false }
 
 [dev-dependencies]
-bevy = { version = "0.14", default-features = false, features = ["bevy_winit", "bevy_pbr", "tonemapping_luts"] }
+bevy = { version = "0.14", default-features = false, features = [
+    "bevy_winit",
+    "bevy_pbr",
+    "tonemapping_luts",
+] }
 
 [lints.clippy]
 type_complexity = "allow"
