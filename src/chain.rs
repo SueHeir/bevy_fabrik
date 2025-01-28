@@ -14,6 +14,33 @@ use crate::constraint::*;
 const DEFAULT_TARGET_SQ_THRESHOLD: f32 = 0.001;
 const DEFAULT_MAX_ITTERATIONS: usize = 10;
 
+/// Wrapper for the [QueryEntityError] specifically for IK chain errors.
+/// Used to work around the [QueryEntityError] lifetime introduced in Bevy 0.15.
+#[derive(Clone, Copy)]
+pub enum IkChainError {
+    IkComponentQueryError,
+}
+
+impl core::error::Error for IkChainError {}
+
+impl core::fmt::Display for IkChainError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Failed to query required IK chain components")
+    }
+}
+
+impl core::fmt::Debug for IkChainError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "IkChainError")
+    }
+}
+
+impl From<QueryEntityError<'_>> for IkChainError {
+    fn from(_: QueryEntityError) -> Self {
+        Self::IkComponentQueryError
+    }
+}
+
 /// Main component that defines an IK chain. Add this to an end entity
 /// of a chain of entities to solve the chain's inverse kinematics.
 #[derive(Reflect)]
@@ -61,16 +88,15 @@ impl IkChain {
         entity: &Entity,
         constraint_query: &mut Query<(Option<&SwingConstraint>, Option<&TwistConstraint>)>,
         transform_query: &mut Query<(Option<&Parent>, &mut Transform, &GlobalTransform)>,
-    ) -> Result<(), QueryEntityError> {
+    ) -> Result<(), IkChainError> {
         if !self.enabled {
             return Ok(());
         }
 
         let dist = transform_query
-            .get(*entity)?
-            .2
-            .translation()
-            .distance_squared(self.target);
+            .get(*entity)
+            .map(|(_, _, gt)| gt.translation().distance_squared(self.target))?;
+
         if dist < self.threshold {
             return Ok(());
         }

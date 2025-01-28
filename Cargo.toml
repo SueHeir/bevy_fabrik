@@ -11,10 +11,10 @@ readme = "README.md"
 repository = "https://github.com/Kilbukas/bevy_fabrik"
 
 [dependencies]
-bevy = { version = "0.14", default-features = false }
+bevy = { version = "0.15", default-features = false }
 
 [dev-dependencies]
-bevy = { version = "0.14", default-features = false, features = [
+bevy = { version = "0.15", default-features = false, features = [
     "bevy_winit",
     "bevy_pbr",
     "tonemapping_luts",

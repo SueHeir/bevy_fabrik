@@ -36,7 +36,9 @@ fn setup(
         half_length: 0.25,
     });
     let joint_material = materials.add(StandardMaterial::default());
-    let root = commands.spawn(SpatialBundle::default()).id();
+    let root = commands
+        .spawn((Transform::default(), Visibility::default()))
+        .id();
 
     let chain_tail = spawn_chain(
         &mut commands,
@@ -49,28 +51,24 @@ fn setup(
 
     commands.entity(chain_tail).insert(IkTailMarker);
 
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(-2.5, 6.5, 9.0).looking_at(Vec3::Y * 3.0, Vec3::Y),
-        ..default()
-    });
+    commands.spawn((
+        Camera3d::default(),
+        Transform::from_xyz(-2.5, 6.5, 9.0).looking_at(Vec3::Y * 3.0, Vec3::Y),
+    ));
 
     commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(Sphere { radius: 0.1 }),
-            material: materials.add(Color::srgb(1.0, 0.0, 0.0)),
-            ..default()
-        },
+        Mesh3d(meshes.add(Sphere { radius: 0.1 })),
+        MeshMaterial3d(materials.add(Color::srgb(1.0, 0.0, 0.0))),
         IkTarget,
     ));
 
-    commands.spawn(DirectionalLightBundle {
-        transform: Transform::from_xyz(50.0, 50.0, 50.0).looking_at(Vec3::ZERO, Vec3::Y),
-        directional_light: DirectionalLight {
+    commands.spawn((
+        Transform::from_xyz(50.0, 50.0, 50.0).looking_at(Vec3::ZERO, Vec3::Y),
+        DirectionalLight {
             illuminance: 1_500.,
             ..default()
         },
-        ..default()
-    });
+    ));
 }
 
 fn ik_setup(mut commands: Commands, query: Query<Entity, With<IkTailMarker>>) {
@@ -119,22 +117,21 @@ fn spawn_chain(
     // Last entity is a segment tail only, so it doesn't need a mesh
     if joint_count == 1 {
         let tail = commands
-            .spawn(SpatialBundle {
-                transform: Transform::from_translation(transform),
-                ..default()
-            })
+            .spawn((
+                Transform::from_translation(transform),
+                Visibility::default(),
+            ))
             .id();
         commands.entity(parent).add_child(tail);
         return tail;
     }
 
     let joint = commands
-        .spawn(PbrBundle {
-            mesh: mesh.clone(),
-            material: material.clone(),
-            transform: Transform::from_translation(transform),
-            ..default()
-        })
+        .spawn((
+            Mesh3d(mesh.clone()),
+            MeshMaterial3d(material.clone()),
+            Transform::from_translation(transform),
+        ))
         .id();
     commands.entity(parent).add_child(joint);
 
