@@ -29,6 +29,7 @@ To add joint constraints, insert `TwistConstraint` and/or `SwingConstraint` comp
 ## Compatibility
 | Bevy | bevy_fabrik |
 |------|-------------|
+| 0.15 | 0.2         |
 | 0.14 | 0.1         |
 
 ## Alternatives
