@@ -1,10 +1,12 @@
+use std::f32::consts::PI;
+
 use bevy::prelude::*;
 use bevy::transform::TransformSystem;
 
 use bevy_fabrik::*;
 
-const SEGMENT_LENGTH: f32 = 0.4;
-const SEGMENT_COUNT: usize = 14;
+const SEGMENT_LENGTH: f32 = 0.2;
+const SEGMENT_COUNT: usize = 30;
 
 #[derive(Component)]
 struct IkTarget;
@@ -47,13 +49,14 @@ fn setup(
         Vec3::Y * SEGMENT_LENGTH,
         SEGMENT_COUNT,
         root,
+        true,
     );
 
     commands.entity(chain_tail).insert(IkTailMarker);
 
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(-2.5, 6.5, 9.0).looking_at(Vec3::Y * 3.0, Vec3::Y),
+        Transform::from_xyz(-2.5, -6.5, 9.0).looking_at(Vec3::NEG_Y * 3.0, Vec3::Y),
     ));
 
     commands.spawn((
@@ -88,9 +91,8 @@ fn move_target(
         let t = time.elapsed().as_millis() as f32;
 
         // Some random coefficients for target movement variety
-        transform.translation.y = (t * 0.003 + std::f32::consts::FRAC_PI_3).sin() * 2.0 + 3.0;
+        transform.translation.y = -(t * 0.003 + std::f32::consts::FRAC_PI_3).sin() * 2.0 - 3.0;
         transform.translation.x = (t * 0.001).cos() * 2.0;
-        transform.translation.z = (t * 0.002 + std::f32::consts::FRAC_PI_3).cos() * 2.0;
     }
 }
 
@@ -113,6 +115,7 @@ fn spawn_chain(
     transform: Vec3,
     joint_count: usize,
     parent: Entity,
+    is_first: bool,
 ) -> Entity {
     // Last entity is a segment tail only, so it doesn't need a mesh
     if joint_count == 1 {
@@ -126,14 +129,29 @@ fn spawn_chain(
         return tail;
     }
 
+    if is_first {
+        let joint = commands
+            .spawn((
+                Mesh3d(mesh.clone()),
+                MeshMaterial3d(material.clone()),
+                Transform::from_translation(transform),
+                
+            ))
+            .id();
+        commands.entity(parent).add_child(joint);
+
+        return spawn_chain(commands, mesh, material, transform, joint_count - 1, joint, false);
+    }
+
     let joint = commands
         .spawn((
             Mesh3d(mesh.clone()),
             MeshMaterial3d(material.clone()),
             Transform::from_translation(transform),
+            SwingConstraint(PI/10.0),
         ))
         .id();
     commands.entity(parent).add_child(joint);
 
-    spawn_chain(commands, mesh, material, transform, joint_count - 1, joint)
+    spawn_chain(commands, mesh, material, transform, joint_count - 1, joint, false)
 }

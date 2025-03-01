@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use bevy::{
     ecs::{
         component::{ComponentHooks, ComponentId, StorageType},
@@ -171,6 +173,8 @@ impl IkChain {
         .into();
 
         for i in 1..joints.len() {
+
+
             let direction: Vec3A = (joints[i].0.translation() - joints[i - 1].0.translation())
                 .normalize()
                 .into();
@@ -201,28 +205,98 @@ impl IkChain {
         }
         .into();
 
+
+        let mut root_angle = 0.0;
         for i in (0..root_end_index).rev() {
-            let child_transform = joints[i + 1].0;
-            let parent_transform = joints[i].0;
+            let a_transform = joints[i + 1].0; // pervious i
+            let b_transform = joints[i].0; // new in loop
 
-            let direction =
-                (parent_transform.translation() - child_transform.translation()).normalize();
+            let a = a_transform.translation().xy();
+            let b = b_transform.translation().xy();
 
-            joints[i + 1].0 = rotate_and_constrain(
-                direction,
-                self.root_normal.into(),
-                child_transform,
-                &joints[i + 1].1,
-            );
+            let diff_angle_raw = wrapf(angle_between_points(a, b) - root_angle, -PI, PI);
+
+            
+            let mut min = -PI;
+            let mut max = PI;
+
+            for test  in  joints[i+1].1.iter() {
+                min = -test.get_angle();
+                max = test.get_angle();
+            }
+            
+
+            let diff_angle = diff_angle_raw.clamp(min, max);
+            let angle = root_angle + diff_angle;
+
+            let rotated_vector = rotate_vector(Vec2::new(self.joint_lengths[i+1], 0.0), angle);
+
+
+            joints[i+1].0 = joints[i+1].0.compute_transform().with_rotation(Quat::from_rotation_z(angle + PI/2.0)).into();
 
             joints[i].0 = Affine3A {
-                matrix3: parent_transform.affine().matrix3,
-                translation: joints[i + 1].0.affine().translation
-                    + Vec3A::from(joints[i + 1].0.up() * self.joint_lengths[i + 1]),
+                matrix3: b_transform.affine().matrix3,
+                translation: Vec3A::new(a.x, a.y, 0.0)
+                    + Vec3A::from( rotated_vector.extend(0.0)),
             }
             .into();
+
+            root_angle = angle;
+
         }
     }
+}
+
+
+fn angle_between_points(p1: Vec2, p2: Vec2) -> f32 {
+    let delta_y = p2.y - p1.y;
+    let delta_x = p2.x - p1.x;
+    
+    // Use atan2 to handle quadrant correctly
+    let angle_radians =  f32::atan2(delta_y, delta_x);
+    
+    return angle_radians; 
+}
+
+#[inline]
+pub fn wrapf(mut n: f32, mut min_limit: f32, mut max_limit: f32) -> f32 {
+    if n >= min_limit && n <= max_limit {
+        return n;
+    }
+
+    if max_limit == 0.0 && min_limit == 0.0 {
+        return 0.0;
+    }
+
+    max_limit -= min_limit;
+
+    let offset = min_limit;
+    min_limit = 0.0;
+    n -= offset;
+
+    let num_of_max = (n / max_limit).abs().floor();
+
+    if n >= max_limit {
+        n -= num_of_max * max_limit;
+    } else if n < min_limit {
+        n += (num_of_max + 1.0) * max_limit;
+    }
+
+    n + offset
+}
+
+
+fn rotate_vector(vector: Vec2, angle: f32) -> Vec2 {
+
+
+    let cos_angle =  f32::cos(angle);
+
+    let sin_angle = f32::sin(angle);
+
+    
+
+    Vec2::new(cos_angle * vector.x - sin_angle * vector.y, sin_angle * vector.x + cos_angle * vector.y)
+
 }
 
 fn ik_chain_insert_hook(mut world: DeferredWorld, entity: Entity, _component_id: ComponentId) {
@@ -277,5 +351,14 @@ fn ik_chain_insert_hook(mut world: DeferredWorld, entity: Entity, _component_id:
     };
 
     chain.joint_lengths = lengths;
-    chain.root_normal = Dir3::new_unchecked(joint_normal.normalize_or(Vec3::Y));
+    
+    let result = Dir3::new(joint_normal.normalize_or(Vec3::Y));
+    if let Ok(re) = result {
+        chain.root_normal = re
+    } else {
+        chain.root_normal = Dir3::new_unchecked(Vec3::Y);
+    }
+    
+
+    info!("{:?}", chain.root_normal);
 }
